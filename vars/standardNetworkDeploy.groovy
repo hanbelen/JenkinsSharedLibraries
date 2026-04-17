@@ -1,5 +1,6 @@
 def call(Map config = [:]) {
     def playbook = config.get('playbook', 'deploy_underlay.yml')
+    def bootstrapPlaybook = config.get('bootstrapPlaybook', 'bootstrap_frr.yml')
     def site = config.get('site', 'syd1')
 
     pipeline {
@@ -7,6 +8,7 @@ def call(Map config = [:]) {
 
         parameters {
             booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Apply config to devices (false = dry run only)')
+            booleanParam(name: 'DAY1', defaultValue: false, description: 'Day 1: Install FRR + deploy underlay (first time only)')
         }
 
         stages {
@@ -19,7 +21,25 @@ def call(Map config = [:]) {
                 }
             }
 
+            stage('Day 1 - Install FRR') {
+                when {
+                    expression { params.DAY1 == true && params.DEPLOY == true }
+                }
+                steps {
+                    echo "Installing FRR on ${site} devices..."
+                    sh """
+                        cd /workspace/automation
+                        ansible-playbook playbooks/${bootstrapPlaybook} \
+                        -i inventory/hosts.yml \
+                        --limit ${site}
+                    """
+                }
+            }
+
             stage('Dry Run (Diff)') {
+                when {
+                    expression { params.DAY1 == false }
+                }
                 steps {
                     echo "Comparing intent vs actual state on FRR devices..."
                     sh """
@@ -32,9 +52,9 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('Deploy to Hardware') {
+            stage('Deploy Underlay') {
                 when {
-                    expression { params.DEPLOY == true }
+                    expression { params.DEPLOY == true && params.DAY1 == false }
                 }
                 steps {
                     echo "Pushing FRR config to ${site} fabric..."
