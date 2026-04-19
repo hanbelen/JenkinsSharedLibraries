@@ -31,7 +31,8 @@ def call(Map config = [:]) {
                         cd /workspace/automation
                         ansible-playbook playbooks/${bootstrapPlaybook} \
                         -i inventory/hosts.yml \
-                        --limit ${site}
+                        --limit ${site} \
+                        -e "site=${site}"
                     """
                 }
             }
@@ -47,6 +48,7 @@ def call(Map config = [:]) {
                         ansible-playbook playbooks/${playbook} \
                         -i inventory/hosts.yml \
                         --limit ${site} \
+                        -e "site=${site}" \
                         --check --diff
                     """
                 }
@@ -62,7 +64,8 @@ def call(Map config = [:]) {
                         cd /workspace/automation
                         ansible-playbook playbooks/${playbook} \
                         -i inventory/hosts.yml \
-                        --limit ${site}
+                        --limit ${site} \
+                        -e "site=${site}"
                     """
                 }
             }
