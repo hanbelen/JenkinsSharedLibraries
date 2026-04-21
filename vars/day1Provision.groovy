@@ -80,6 +80,9 @@ def call(Map config = [:]) {
             }
 
             stage('Verify Interfaces') {
+                when {
+                    expression { return !params.DRY_RUN }
+                }
                 steps {
                     sh """
                         ansible-playbook automation/playbooks/verify_interfaces.yml \
