@@ -1,48 +1,58 @@
 def call(Map config = [:]) {
-    def inventoryRepo   = config.get('inventoryRepo',  'https://github.com/hanbelen/NetworkInventoryData.git')
-    def inventoryBranch = config.get('inventoryBranch', 'main')
-    def automationRepo  = config.get('automationRepo',  'https://github.com/hanbelen/NetworkAutomationCore.git')
+    def inventoryRepo    = config.get('inventoryRepo',  'https://github.com/hanbelen/NetworkInventoryData.git')
+    def inventoryBranch  = config.get('inventoryBranch', 'main')
+    def automationRepo   = config.get('automationRepo',  'https://github.com/hanbelen/NetworkAutomationCore.git')
     def automationBranch = config.get('automationBranch', 'main')
     def credentialsId    = config.get('credentialsId', 'github-hanbelen')
 
-    pipeline {
-        agent { label 'ansible-agent' }
+    // Device lists per site (from SoT devices.yml)
+    def siteDevices = [
+        'syd1': ['all', 'syd1-a-p0-spn-01', 'syd1-a-p0-ssp-01', 'syd1-a-p0-ssp-02',
+                  'syd1-a-p0-brl-01', 'syd1-a-p0-brl-05', 'syd1-a-p0-brl-06',
+                  'syd1-a-p1-lef-01', 'syd1-a-p1-lef-02', 'syd1-a-p1-spn-01', 'syd1-a-p1-spn-02',
+                  'syd1-a-p2-lef-01', 'syd1-a-p2-spn-01'],
+        'mel1': ['all', 'mel1-a-p0-spn-01', 'mel1-a-p0-ssp-01',
+                  'mel1-a-p1-lef-01', 'mel1-a-p1-spn-01'],
+    ]
 
-        parameters {
+    properties([
+        parameters([
             booleanParam(
                 name: 'DRY_RUN',
                 defaultValue: true,
                 description: 'Show what would change without applying config'
-            )
+            ),
             choice(
                 name: 'SITE',
                 choices: ['syd1', 'mel1'],
                 description: 'Target site (from SoT)'
-            )
-            choice(
+            ),
+            [$class: 'CascadeChoiceParameter',
                 name: 'TARGET_DEVICE',
-                choices: [
-                    'all',
-                    'syd1-a-p0-spn-01',
-                    'syd1-a-p0-ssp-01',
-                    'syd1-a-p0-ssp-02',
-                    'syd1-a-p0-brl-01',
-                    'syd1-a-p0-brl-05',
-                    'syd1-a-p0-brl-06',
-                    'syd1-a-p1-lef-01',
-                    'syd1-a-p1-lef-02',
-                    'syd1-a-p1-spn-01',
-                    'syd1-a-p1-spn-02',
-                    'syd1-a-p2-lef-01',
-                    'syd1-a-p2-spn-01',
-                    'mel1-a-p0-spn-01',
-                    'mel1-a-p0-ssp-01',
-                    'mel1-a-p1-lef-01',
-                    'mel1-a-p1-spn-01',
-                ],
-                description: 'Deploy to a single device or all devices in the site'
-            )
-        }
+                description: 'Deploy to a single device or all devices in the site',
+                referencedParameters: 'SITE',
+                choiceType: 'PT_SINGLE_SELECT',
+                script: [$class: 'GroovyScript',
+                    script: [
+                        classpath: [],
+                        sandbox: true,
+                        script: """
+                            def devices = ${siteDevices.inspect()}
+                            return devices.get(SITE, ['all'])
+                        """.stripIndent()
+                    ],
+                    fallbackScript: [
+                        classpath: [],
+                        sandbox: true,
+                        script: "return ['all']"
+                    ]
+                ]
+            ]
+        ])
+    ])
+
+    pipeline {
+        agent { label 'ansible-agent' }
 
         environment {
             OUT_DIR = "${WORKSPACE}/day1_output"
@@ -57,19 +67,6 @@ def call(Map config = [:]) {
                     }
                     dir('inventory') {
                         git url: inventoryRepo, branch: inventoryBranch, credentialsId: credentialsId
-                    }
-                }
-            }
-
-            stage('Validate Target') {
-                when {
-                    expression { return params.TARGET_DEVICE != 'all' }
-                }
-                steps {
-                    script {
-                        if (!params.TARGET_DEVICE.startsWith(params.SITE)) {
-                            error "TARGET_DEVICE '${params.TARGET_DEVICE}' does not belong to site '${params.SITE}'"
-                        }
                     }
                 }
             }
@@ -104,9 +101,10 @@ def call(Map config = [:]) {
                             echo "DRY RUN — configs generated but not applied"
                             sh "ls -1 ${OUT_DIR}/configs/"
                         } else {
-                            def limit = params.TARGET_DEVICE != 'all' ? "--limit ${params.TARGET_DEVICE}" : ""
+                            def target = params.TARGET_DEVICE ?: 'all'
+                            def limit = target != 'all' ? "--limit ${target}" : ""
                             if (limit) {
-                                echo "TARGETING: ${params.TARGET_DEVICE}"
+                                echo "TARGETING: ${target}"
                             }
                             sh """
                                 ansible-playbook automation/playbooks/day0_provision.yml \
@@ -125,7 +123,8 @@ def call(Map config = [:]) {
                 }
                 steps {
                     script {
-                        def limit = params.TARGET_DEVICE != 'all' ? "--limit ${params.TARGET_DEVICE}" : ""
+                        def target = params.TARGET_DEVICE ?: 'all'
+                        def limit = target != 'all' ? "--limit ${target}" : ""
                         sh """
                             ansible-playbook automation/playbooks/verify_interfaces.yml \
                                 -i ${OUT_DIR}/inventory.yml \
