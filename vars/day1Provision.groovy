@@ -3,6 +3,7 @@ def call(Map config = [:]) {
     def inventoryBranch = config.get('inventoryBranch', 'main')
     def automationRepo  = config.get('automationRepo',  'https://github.com/hanbelen/NetworkAutomationCore.git')
     def automationBranch = config.get('automationBranch', 'main')
+    def credentialsId    = config.get('credentialsId', 'github-hanbelen')
 
     pipeline {
         agent { label 'ansible-agent' }
@@ -29,10 +30,10 @@ def call(Map config = [:]) {
             stage('Checkout Repos') {
                 steps {
                     dir('automation') {
-                        git url: automationRepo, branch: automationBranch
+                        git url: automationRepo, branch: automationBranch, credentialsId: credentialsId
                     }
                     dir('inventory') {
-                        git url: inventoryRepo, branch: inventoryBranch
+                        git url: inventoryRepo, branch: inventoryBranch, credentialsId: credentialsId
                     }
                 }
             }
