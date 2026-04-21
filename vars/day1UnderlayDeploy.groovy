@@ -71,23 +71,11 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('Discover Devices') {
+            stage('Generate Underlay Configs') {
                 steps {
                     sh "mkdir -p ${OUT_DIR}"
                     sh """
-                        python3 automation/scripts/discover_site.py ${params.SITE} \
-                            --inventory-dir inventory \
-                            --output-dir ${OUT_DIR}
-                    """
-                    sh "cat ${OUT_DIR}/discovery_report.txt"
-                }
-            }
-
-            stage('Generate Underlay Configs') {
-                steps {
-                    sh """
                         python3 automation/scripts/generate_underlay_config.py \
-                            ${OUT_DIR}/devices.json \
                             --inventory-dir inventory \
                             --site ${params.SITE} \
                             --output-dir ${OUT_DIR}/underlay
@@ -109,7 +97,7 @@ def call(Map config = [:]) {
                             }
                             sh """
                                 ansible-playbook automation/playbooks/day1_underlay.yml \
-                                    -i ${OUT_DIR}/inventory.yml \
+                                    -i ${OUT_DIR}/underlay/inventory.yml \
                                     -e "config_dir=${OUT_DIR}/underlay" \
                                     ${limit}
                             """
@@ -128,7 +116,7 @@ def call(Map config = [:]) {
                         def limit = target != 'all' ? "--limit ${target}" : ""
                         sh """
                             ansible-playbook automation/playbooks/verify_bgp.yml \
-                                -i ${OUT_DIR}/inventory.yml \
+                                -i ${OUT_DIR}/underlay/inventory.yml \
                                 ${limit}
                         """
                     }
