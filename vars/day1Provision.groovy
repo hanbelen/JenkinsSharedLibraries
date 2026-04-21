@@ -19,6 +19,29 @@ def call(Map config = [:]) {
                 choices: ['syd1', 'mel1'],
                 description: 'Target site (from SoT)'
             )
+            choice(
+                name: 'TARGET_DEVICE',
+                choices: [
+                    'all',
+                    'syd1-a-p0-spn-01',
+                    'syd1-a-p0-ssp-01',
+                    'syd1-a-p0-ssp-02',
+                    'syd1-a-p0-brl-01',
+                    'syd1-a-p0-brl-05',
+                    'syd1-a-p0-brl-06',
+                    'syd1-a-p1-lef-01',
+                    'syd1-a-p1-lef-02',
+                    'syd1-a-p1-spn-01',
+                    'syd1-a-p1-spn-02',
+                    'syd1-a-p2-lef-01',
+                    'syd1-a-p2-spn-01',
+                    'mel1-a-p0-spn-01',
+                    'mel1-a-p0-ssp-01',
+                    'mel1-a-p1-lef-01',
+                    'mel1-a-p1-spn-01',
+                ],
+                description: 'Deploy to a single device or all devices in the site'
+            )
         }
 
         environment {
@@ -34,6 +57,19 @@ def call(Map config = [:]) {
                     }
                     dir('inventory') {
                         git url: inventoryRepo, branch: inventoryBranch, credentialsId: credentialsId
+                    }
+                }
+            }
+
+            stage('Validate Target') {
+                when {
+                    expression { return params.TARGET_DEVICE != 'all' }
+                }
+                steps {
+                    script {
+                        if (!params.TARGET_DEVICE.startsWith(params.SITE)) {
+                            error "TARGET_DEVICE '${params.TARGET_DEVICE}' does not belong to site '${params.SITE}'"
+                        }
                     }
                 }
             }
@@ -68,11 +104,15 @@ def call(Map config = [:]) {
                             echo "DRY RUN — configs generated but not applied"
                             sh "ls -1 ${OUT_DIR}/configs/"
                         } else {
-                            echo "APPLYING Day0 config to ${params.SITE} devices..."
+                            def limit = params.TARGET_DEVICE != 'all' ? "--limit ${params.TARGET_DEVICE}" : ""
+                            if (limit) {
+                                echo "TARGETING: ${params.TARGET_DEVICE}"
+                            }
                             sh """
                                 ansible-playbook automation/playbooks/day0_provision.yml \
                                     -i ${OUT_DIR}/inventory.yml \
-                                    -e "config_dir=${OUT_DIR}/configs"
+                                    -e "config_dir=${OUT_DIR}/configs" \
+                                    ${limit}
                             """
                         }
                     }
@@ -84,10 +124,14 @@ def call(Map config = [:]) {
                     expression { return !params.DRY_RUN }
                 }
                 steps {
-                    sh """
-                        ansible-playbook automation/playbooks/verify_interfaces.yml \
-                            -i ${OUT_DIR}/inventory.yml
-                    """
+                    script {
+                        def limit = params.TARGET_DEVICE != 'all' ? "--limit ${params.TARGET_DEVICE}" : ""
+                        sh """
+                            ansible-playbook automation/playbooks/verify_interfaces.yml \
+                                -i ${OUT_DIR}/inventory.yml \
+                                ${limit}
+                        """
+                    }
                 }
             }
         }
