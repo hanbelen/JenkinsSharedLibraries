@@ -65,14 +65,8 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         if (params.DRY_RUN) {
-                            echo "DRY RUN — showing generated configs (no changes applied)"
-                            sh """
-                                for f in ${OUT_DIR}/configs/*.json; do
-                                    echo ""
-                                    echo "========== \$(basename \$f) =========="
-                                    python3 -m json.tool \$f
-                                done
-                            """
+                            echo "DRY RUN — configs generated but not applied"
+                            sh "ls -1 ${OUT_DIR}/configs/"
                         } else {
                             echo "APPLYING Day0 config to ${params.SITE} devices..."
                             sh """
