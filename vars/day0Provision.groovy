@@ -88,7 +88,7 @@ def call(Map config = [:]) {
                     sh """
                         python3 automation/scripts/generate_day0_config.py \
                             ${OUT_DIR}/devices.json \
-                            automation/references/config_db.json \
+                            automation/references/default.json \
                             --output-dir ${OUT_DIR}/configs
                     """
                 }
